@@ -16,20 +16,33 @@ from insightface.app import FaceAnalysis
 
 # FaceAnalysisを継承（draw_on関数を上書き）
 class FaceAnalysis1(FaceAnalysis):
-    def draw_on(self, img, faces):
-        import cv2
+    def draw_on(self, img, faces, size):
         dimg = img.copy()
         for i in range(len(faces)):
             face = faces[i]
             box = face.bbox.astype(np.int)
-            color = (0, 0, 255)
-            cv2.rectangle(dimg, (box[0], box[1]), (box[2], box[3]), color, 2)
 
-            if face.gender is not None and face.age is not None:
-                cv2.putText(dimg, '%s,%d' % (face.sex, face.age),
-                            (box[0] - 1, box[1] - 4), cv2.FONT_HERSHEY_COMPLEX,
-                            0.7, (0, 255, 0), 1)
+            # 認識した部分の画像にモザイクをかける
+            dimg = mosaic(dimg, (box[0], box[1], box[2], box[3]), size)
+
         return dimg
+
+
+def mosaic(img, rect, size):
+    # モザイクをかける領域を取得
+    (x1, y1, x2, y2) = rect
+    w = x2 - x1
+    h = y2 - y1
+    i_rect = img[y1:y2, x1:x2]
+
+    # モザイク処理のため一度縮小して拡大する
+    i_small = cv2.resize(i_rect, (size, size))
+    i_mos = cv2.resize(i_small, (w, h), interpolation=cv2.INTER_AREA)
+
+    # 画像にモザイク画像を重ねる
+    img2 = img.copy()
+    img2[y1:y2, x1:x2] = i_mos
+    return img2
 
 
 def main():
@@ -39,12 +52,12 @@ def main():
     image_file = "input.jpg"
     img = cv2.imread(image_file)
     faces = app.get(np.asarray(img))
-    print("number of faces:" + str(len(faces)))
-
-    rimg = app.draw_on(img, faces)
+    mosaic_size = 10
+    rimg = app.draw_on(img, faces, mosaic_size)
     now = datetime.now()
     now_str = now.strftime("%y%m%d%H%M%S")
     cv2.imwrite(f"output{now_str}.jpg", rimg)
+    print("完了しました。")
 
 
 if __name__ == "__main__":

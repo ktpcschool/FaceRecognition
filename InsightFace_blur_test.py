@@ -17,19 +17,29 @@ from insightface.app import FaceAnalysis
 # FaceAnalysisを継承（draw_on関数を上書き）
 class FaceAnalysis1(FaceAnalysis):
     def draw_on(self, img, faces):
-        import cv2
         dimg = img.copy()
         for i in range(len(faces)):
             face = faces[i]
             box = face.bbox.astype(np.int)
-            color = (0, 0, 255)
-            cv2.rectangle(dimg, (box[0], box[1]), (box[2], box[3]), color, 2)
 
-            if face.gender is not None and face.age is not None:
-                cv2.putText(dimg, '%s,%d' % (face.sex, face.age),
-                            (box[0] - 1, box[1] - 4), cv2.FONT_HERSHEY_COMPLEX,
-                            0.7, (0, 255, 0), 1)
+            # 認識した部分の画像にぼかしをかける
+            dimg = blur(dimg, (box[0], box[1], box[2], box[3]))
+
         return dimg
+
+
+def blur(img, rect):
+    # ぼかしをかける領域を取得
+    (x1, y1, x2, y2) = rect
+    i_rect = img[y1:y2, x1:x2]
+
+    # ぼかし処理
+    i_mos = cv2.blur(i_rect, ksize=(15, 15))
+
+    # 画像にぼかし画像を重ねる
+    img2 = img.copy()
+    img2[y1:y2, x1:x2] = i_mos
+    return img2
 
 
 def main():
@@ -39,12 +49,11 @@ def main():
     image_file = "input.jpg"
     img = cv2.imread(image_file)
     faces = app.get(np.asarray(img))
-    print("number of faces:" + str(len(faces)))
-
     rimg = app.draw_on(img, faces)
     now = datetime.now()
     now_str = now.strftime("%y%m%d%H%M%S")
     cv2.imwrite(f"output{now_str}.jpg", rimg)
+    print("完了しました。")
 
 
 if __name__ == "__main__":
