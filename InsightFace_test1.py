@@ -17,7 +17,6 @@ from insightface.app import FaceAnalysis
 # FaceAnalysisを継承（draw_on関数を上書き）
 class FaceAnalysis1(FaceAnalysis):
     def draw_on(self, img, faces):
-        import cv2
         dimg = img.copy()
         for i in range(len(faces)):
             face = faces[i]
