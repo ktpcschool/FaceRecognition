@@ -130,4 +130,5 @@ dmypy.json
 
 .idea/
 
+input*.jpg
 output*.jpg
