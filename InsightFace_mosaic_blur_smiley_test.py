@@ -14,9 +14,9 @@ https://github.com/ktpcschool/FaceRecognition
 import cv2
 from datetime import datetime
 import numpy as np
+from PIL import Image
 
 from insightface.app import FaceAnalysis
-from PIL import Image
 
 
 class CvOverlayImage(object):
@@ -66,27 +66,71 @@ class CvOverlayImage(object):
             Image.alpha_composite(pil_rgba_bg_image, pil_rgba_bg_temp)
 
         # OpenCV形式画像へ変換
-        cv_bgr_result_image = cv2.cvtColor(np.asarray(result_image),
-                                           cv2.COLOR_RGBA2BGRA)
+        cv_bgr_result_image = cv2.cvtColor(
+            np.asarray(result_image), cv2.COLOR_RGBA2BGRA)
 
         return cv_bgr_result_image
 
 
 # FaceAnalysisを継承（draw_on関数を上書き）
 class FaceAnalysis1(FaceAnalysis):
-    def draw_on(self, img, faces, mosaic_img):
+    def __init__(self,
+                 mosaic_method,
+                 root='~/.insightface',
+                 size=None,
+                 cv_overlay_image=None):
+        super().__init__(root=root)
+        self.mosaic_method = mosaic_method
+        self.size = size
+        self.cv_overlay_image = cv_overlay_image
+
+    def draw_on(self, img, faces):
         dimg = img.copy()
         for i in range(len(faces)):
             face = faces[i]
             box = face.bbox.astype(np.int)
 
             # 認識した部分の画像にモザイクをかける
-            dimg = mosaic(dimg, (box[0], box[1], box[2], box[3]), mosaic_img)
+            dimg = self.mosaic_method(dimg,
+                                      (box[0], box[1], box[2], box[3]),
+                                      self.size,
+                                      self.cv_overlay_image)
 
         return dimg
 
 
-def mosaic(img, rect, cv_overlay_image):
+def mosaic(img, rect, size, cv_overlay_image):
+    # モザイクをかける領域を取得
+    (x1, y1, x2, y2) = rect
+    w = x2 - x1
+    h = y2 - y1
+    i_rect = img[y1:y2, x1:x2]
+
+    # モザイク処理のため一度縮小して拡大する
+    i_small = cv2.resize(i_rect, size)
+    i_mos = cv2.resize(i_small, (w, h), interpolation=cv2.INTER_AREA)
+
+    # 画像にモザイク画像を重ねる
+    img2 = img.copy()
+    img2[y1:y2, x1:x2] = i_mos
+    return img2
+
+
+def blur(img, rect, size, cv_overlay_image):
+    # ぼかしをかける領域を取得
+    (x1, y1, x2, y2) = rect
+    i_rect = img[y1:y2, x1:x2]
+
+    # ぼかし処理
+    i_mos = cv2.blur(i_rect, ksize=size)
+
+    # 画像にぼかし画像を重ねる
+    img2 = img.copy()
+    img2[y1:y2, x1:x2] = i_mos
+    return img2
+
+
+def mosaic_by_image(img, rect, size, cv_overlay_image):
     # モザイクをかける領域を取得
     (x1, y1, x2, y2) = rect
     w = x2 - x1
@@ -105,16 +149,36 @@ def mosaic(img, rect, cv_overlay_image):
 
 
 def main():
-    app = FaceAnalysis1()
+    root = '~/.insightface'
+
+    # モザイク
+    # mosaic_method = mosaic
+    # size = (10, 10)
+    # cv_overlay_image = None
+
+    # ぼかし
+    # mosaic_method = blur
+    # size = (15, 15)
+    # cv_overlay_image = None
+
+    # smiley
+    mosaic_method = mosaic_by_image
+    size = None
+    mosaic_image_file = "smiley.png"
+    mosaic_img = cv2.imread(mosaic_image_file,
+                            cv2.IMREAD_UNCHANGED)  # IMREAD_UNCHANGEDを指定しα込みで読み込む
+    cv_overlay_image = mosaic_img
+
+    app = FaceAnalysis1(mosaic_method=mosaic_method,
+                        root=root,
+                        size=size,
+                        cv_overlay_image=cv_overlay_image)
     app.prepare(ctx_id=0, det_size=(640, 640))
 
     image_file = "input.jpg"
     img = cv2.imread(image_file)
     faces = app.get(np.asarray(img))
-    mosaic_image_file = "smiley.png"
-    mosaic_img = cv2.imread(mosaic_image_file,
-                            cv2.IMREAD_UNCHANGED)  # IMREAD_UNCHANGEDを指定しα込みで読み込む
-    rimg = app.draw_on(img, faces, mosaic_img)
+    rimg = app.draw_on(img, faces)
     now = datetime.now()
     now_str = now.strftime("%y%m%d%H%M%S")
     cv2.imwrite(f"output{now_str}.jpg", rimg)
